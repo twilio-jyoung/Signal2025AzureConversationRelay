@@ -1,0 +1,9 @@
+{
+  "profiles": {
+    "Signal2025AzureConversationRelay": {
+      "commandName": "Project",
+      "commandLineArgs": "--port 7126",
+      "launchBrowser": false
+    }
+  }
+}

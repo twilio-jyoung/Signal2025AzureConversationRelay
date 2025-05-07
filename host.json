@@ -1,0 +1,16 @@
+{
+	"version": "2.0",
+	"logging": {
+		"applicationInsights": {
+			"samplingSettings": {
+				"isEnabled": false
+			},
+			"enableLiveMetricsFilters": true
+		}
+	},
+	"extensions": {
+		"durableTask": {
+			"hubName": "DurableFunctionsHub"
+		}
+	}
+}
