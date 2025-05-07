@@ -1,0 +1,36 @@
+{
+	"IsEncrypted": false,
+	"Values": {
+		"AzureWebJobsStorage": "UseDevelopmentStorage=true",
+		"FUNCTIONS_WORKER_RUNTIME": "dotnet-isolated"
+	},
+	"Azure": {
+		"OpenAI": {
+			"DeploymentName": "gpt-4.1-standard",
+			"Endpoint": "URL",
+			"APIKey": "KEY"
+		},
+		"WebPubSub": {
+			"ConnectionString": "Endpoint=",
+			"HubName": "Hub"
+		}
+	},
+	"Twilio": {
+		"AccountSid": "ACxxx",
+		"AuthToken": "abcxxx",
+		"ConversationRelay": {
+			"TwiML": {
+				"TranscriptionLanguage": "en-US",
+				"TranscriptionProvider": "Google",
+				"TranscriptionSpeechModel": "telephony",
+				"TTSLanguage": "en-US",
+				"TTSProvider": "ElevenLabs",
+				"TTSVoice": "OYTbf65OHHFELVut7v2H",
+				"Interruptible": true,
+				"DtmfDetection": true,
+				"WelcomeGreeting": "Conversation Relay is now connected.",
+				"Debug": false
+			}
+		}
+	}
+}
