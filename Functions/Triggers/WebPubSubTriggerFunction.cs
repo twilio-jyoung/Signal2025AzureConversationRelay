@@ -4,6 +4,8 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.DurableTask.Client;
 using Microsoft.Extensions.Logging;
+using Signal2025AzureConversationRelay.Messages;
+using Twilio.TwiML.Messaging;
 
 namespace Signal2025AzureConversationRelay
 {
@@ -32,12 +34,27 @@ namespace Signal2025AzureConversationRelay
                 // log the event
                 _logger.LogDebug($"{json}");
 
-                // raise the event to the running orchestrator, returns when successfully queued
-                await dtClient.RaiseEventAsync(
-                    instanceId: callSid, 
-                    eventName: "ConversationRelayMessage", 
-                    eventPayload: json
-                );
+                // deserialize the message to get the type
+                var message = MessageFactory.Deserialize(json, callSid);
+
+                // trying a hack to see if this works
+                if(message.Type == Messages.FromTwilio.InboundMessageType.Interrupt){
+                    _logger.LogDebug("UserInterruptMessage detected, terminating promptorchestrator instance {CallSid}", callSid.Substring(2));
+                    try{
+                        await dtClient.TerminateInstanceAsync(callSid.Substring(2));
+                    }
+                    catch (Exception){}
+                }
+                else{
+                    // raise the event to the running orchestrator, returns when successfully queued
+                    await dtClient.RaiseEventAsync(
+                        instanceId: callSid, 
+                        eventName: message.GetType().Name,
+                        eventPayload: message
+                    );
+                }
+
+
 
                 return new OkObjectResult("Ack");
             }

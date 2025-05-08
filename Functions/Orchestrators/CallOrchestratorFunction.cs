@@ -1,16 +1,14 @@
+using System;
+using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.Logging;
 using Microsoft.DurableTask;
-using Signal2025AzureConversationRelay.Messages.FromTwilio;
-using Microsoft.SemanticKernel.ChatCompletion;
-using System;
-using System.Threading;
 using Microsoft.DurableTask.Entities;
-using Signal2025AzureConversationRelay.Messages;
-using Signal2025AzureConversationRelay.Functions.Activities;
 using Signal2025AzureConversationRelay.Entities;
-using System.Collections.Generic;
+using Signal2025AzureConversationRelay.Messages.FromTwilio;
+
 
 namespace Signal2025AzureConversationRelay
 {
@@ -34,6 +32,20 @@ namespace Signal2025AzureConversationRelay
 
         private static ILogger _logger;
 
+        /// <summary>
+        /// The orchestrator manages all events from ConversationRelay and Twilio.
+        /// It will then delegate the responses to an LLM via sub-orchestrators or activity functions.
+        /// 
+        /// It will also manage the state of the conversation using a durable entity.
+        /// The orchestrator will run in a loop until one of the following conditions are met:
+        /// 1. The CallStatus is updated to completed by Twilio
+        /// 2. The orchestrator ends after a timeout
+        /// 3. Conversation Relay signals the end of a session
+        /// 
+        /// Once one of these conditions are met, it will handle transitioning the call accordingly.
+        /// </summary>
+        /// <param name="context"></param>
+        /// <returns></returns>
         [Function(nameof(CallOrchestratorFunction))]
         public static async Task RunOrchestrator(
             [OrchestrationTrigger] TaskOrchestrationContext context)
@@ -44,115 +56,111 @@ namespace Signal2025AzureConversationRelay
 
             using (_logger.BeginScope(callSid))
             {
-                // create a durable entity to manage the conversation turns of the call
+                // we'll create a durable entity to manage the conversation turns of the call using 
+                // Microsoft.SemanticKernel.ChatCompletion.ChatHistory as the state
+                // this initializes the ChatHistory entity with a default system prompt so that the 
+                // agent has some base instructions to work with when responding to the user
                 var conversationEntityInstance = new EntityInstanceId(nameof(ConversationHistoryEntity), callSid);
 
-                var endSessionEvents = new List<Task>();
-
-                // end the orchestrator if the call runs for too long
+                #region setup events capable of interrupting the default flow
+                // we will set a maximum time to live for the orchestrator as most customer interactions
+                // using conversation relay will be short-lived. this is a fail-safe mechanism to ensure
+                // that the orchestrator does not run indefinitely.
                 TimeSpan timeout = TimeSpan.FromMinutes(MaxMinutesTTL);
                 DateTime deadline = context.CurrentUtcDateTime.Add(timeout);
                 var timerTask = context.CreateTimer(deadline, CancellationToken.None);
 
-                // end the orchestrator if the call moves to a completed state by Twilio
-                var callStatusCompletedTask = context.WaitForExternalEvent<string>("TwilioCallStatusEvent");
+                // we'll setup a listener which listens to the call status callback from Twilio to let us know
+                // if the call has ended
+                var callStatusCompletedTask = context.WaitForExternalEvent<string>("TwilioCallStatusCompletedEvent");
 
-                // end the orchestrator if conversation relay triggers the action callback url
-                var actionCallbackTask = context.WaitForExternalEvent<string>("ConversationRelayActionCallbackEvent");
+                //TODO: add a listener for the conversation relay action callback event
+                // var actionCallbackTask = context.WaitForExternalEvent<string>("ConversationRelayActionCallbackEvent");
+                #endregion
 
-                endSessionEvents.Add(timerTask);
-                endSessionEvents.Add(callStatusCompletedTask);
-                endSessionEvents.Add(actionCallbackTask);
+                // very quickly after the orchestrator starts, the first event which should be received 
+                // is the setup message from conversation relay
+                var setupMessage = context.WaitForExternalEvent<SystemSetupMessage>(nameof(SystemSetupMessage));
 
-                // wait for any of the end session events to complete
-                // await Task.WhenAny(endSessionEvents);
+                // wait for the setup message to complete, the call to end, or the timer to expire
+                var processedEvent = await Task.WhenAny(timerTask, callStatusCompletedTask, setupMessage);
 
+                // decide if we should continue the call based on the event that was raised
+                callActive = await HandleIntialAwaitedEvent(context, conversationEntityInstance, timerTask, callStatusCompletedTask, setupMessage, processedEvent);
+
+                // keep track of a last running prompt sub-orchestrator instance id in case we need to cancel it
+                string promptSubOrchestratorInstanceId = null;
+
+                // next, we'll start a loop where we listen for messages from conversation relay 
+                // which signal a user action, and handle them accordingly.
                 while (callActive)
                 {
-                    callActive = await ProcessCallEvents(context, conversationEntityInstance, timerTask, _logger);
-                }
+                    // we'll setup a listener for when the user speaks to the assistant. 
+                    var userPromptTask = context.WaitForExternalEvent<UserPromptMessage>(nameof(UserPromptMessage));
 
-                await context.Entities.SignalEntityAsync(conversationEntityInstance, nameof(ConversationHistoryEntity.Delete));
+                    // lastly we'll setup a listener for when the user presses a DTMF key on their phone
+                    var userDTMFTask = context.WaitForExternalEvent<UserDTMFMessage>(nameof(UserDTMFMessage));
+
+                    List<Task> eventsToWaitFor = [userPromptTask, userDTMFTask, timerTask, callStatusCompletedTask];
+
+                    var callEvent = await Task.WhenAny(eventsToWaitFor);
+
+                    switch (callEvent)
+                    {
+                        case var _ when callEvent == userPromptTask:
+                            // generate a replay safe guid to use as the instance id if we need to run a sub-orchestrator
+                            promptSubOrchestratorInstanceId = context.NewGuid().ToString();
+
+                            //send to a sub-orchestrator to handle the prompt
+                            var taskOptions = new TaskOptions().WithInstanceId(callSid.Substring(2));
+
+                            // call a sub-orchestrator to handle the prompt.  we do this so that we can cancel the sub-orchestrator
+                            // if the user interrupts the assistant.  this is a bit of a hack to get around the fact that azure
+                            // durable orchestrator functions do not support cancellation tokens
+                            _ = context.CallSubOrchestratorAsync(nameof(PromptOrchestratorFunction), userPromptTask.Result, new TaskOptions().WithInstanceId(callSid.Substring(2)));
+                            break;
+
+                        case var _ when callEvent == userDTMFTask:
+                            _logger.LogTrace($"DTMF Digit: {userDTMFTask.Result.Digit}");
+                            break;
+
+                        case var _ when callEvent == timerTask:
+                            callActive = false;
+                            break;
+
+                        case var _ when callEvent == callStatusCompletedTask:
+                            callActive = false;
+                            break;
+                    }
+                }
             }
         }
-
-        private static async Task<bool> ProcessCallEvents(TaskOrchestrationContext context, EntityInstanceId entityInstanceId, Task timerTask, ILogger _logger)
+        private static async Task<bool> HandleIntialAwaitedEvent(TaskOrchestrationContext context, EntityInstanceId conversationEntityInstance, Task timerTask, Task<string> callStatusCompletedTask, Task<SystemSetupMessage> setupMessage, Task processedEvent)
         {
-            // wait for an event from the conversation relay, or the timer to expire
-            var eventTask = context.WaitForExternalEvent<string>("ConversationRelayMessage");
-            var callStatusTask = context.WaitForExternalEvent<string>("TwilioCallStatusEvent");
-            var completedTask = await Task.WhenAny(eventTask, callStatusTask, timerTask);
-
-            // if the timer expired, we will end the call and set the status
-            if (completedTask == timerTask)
+            if (processedEvent == timerTask)
             {
+                // if the timer expired, we will end the call and set the status
                 _logger.LogWarning("Max TTL Timer expired");
                 context.SetCustomStatus("Max TTL Timer expired");
                 return false;
-                // TODO: gracefully end the twilio call if not already ended
             }
-
-            if (completedTask == callStatusTask)
+            else if (processedEvent == callStatusCompletedTask)
             {
                 // if the call status task completed, we will log the status and return
-                var callStatus = callStatusTask.Result;
+                var callStatus = callStatusCompletedTask.Result;
                 context.SetCustomStatus($"Call status moved to {callStatus} by Twilio");
                 return false;
             }
-
-
-            // if the eventTask completed, we will deserialize the message and pass it to the 
-            // appropriate activity function
-            var eventJson = eventTask.Result;
-            var inboundMessage = MessageFactory.Deserialize(eventJson, context.InstanceId);
-
-            switch (inboundMessage.Type)
+            else if (processedEvent == setupMessage)
             {
-                case InboundMessageType.Prompt:
-                    var promptMessage = (UserPromptMessage)inboundMessage;
-                    _logger.LogTrace($"Voice Prompt: {promptMessage.VoicePrompt}");
-                    
-                    // add the prompt to the conversation history entity
-                    var currentHistory = await context.Entities.CallEntityAsync<ChatHistory>(entityInstanceId, nameof(ConversationHistoryEntity.AddUserMessage), promptMessage.VoicePrompt);
-
-                    // call the activity function to handle the prompt
-                    var activityParameters = new HandlePromptActivityFunctionParams()
-                    {
-                        UserPromptMessage = promptMessage,
-                        ChatHistory = currentHistory
-                    };
-                    var response = await context.CallActivityAsync<string>(nameof(HandlePromptActivityFunction), activityParameters);
-                    await context.Entities.SignalEntityAsync(entityInstanceId, nameof(ConversationHistoryEntity.AddAssistantMessage), response);
-                    break;
-                case InboundMessageType.DTMF:
-                    var dtmfMessage = (UserDTMFMessage)inboundMessage;
-                    _logger.LogTrace($"DTMF Digit: {dtmfMessage.Digit}");
-                    var updateForEntity = $"The user entered '{dtmfMessage.Digit}' on their phone keypad.";
-                    await context.Entities.SignalEntityAsync(entityInstanceId, nameof(ConversationHistoryEntity.AddDeveloperMessage), updateForEntity);
-                    break;
-                case InboundMessageType.Interrupt:
-                    var interruptMessage = (UserInterruptMessage)inboundMessage;
-                    _logger.LogTrace($"Interrupted @: {interruptMessage.UtteranceUntilInterrupt}");
-                    var interruptUpdate = $"The user interrupted the conversation around when you said '{interruptMessage.UtteranceUntilInterrupt}'.  Anything said after that was not heard by the user.";
-                    await context.Entities.SignalEntityAsync(entityInstanceId, nameof(ConversationHistoryEntity.AddDeveloperMessage), interruptUpdate);
-                    break;
-                case InboundMessageType.Setup:
-                    var setupMessage = (SystemSetupMessage)inboundMessage;
-                    _logger.LogTrace($"Conversation Relay Session ID: {setupMessage.SessionId}");
-                    if(setupMessage.CustomParameters?.Count > 0)
-                    {
-                        var customParams = string.Join(Environment.NewLine, setupMessage.CustomParameters);
-                        var setupMessageUpdate = $"The following custom parameters were recieved and may be helpful context: {customParams}";
-                        await context.Entities.SignalEntityAsync(entityInstanceId, nameof(ConversationHistoryEntity.AddDeveloperMessage), setupMessageUpdate);
-                    }
-                    break;
-                case InboundMessageType.Error:
-                    var errorMessage = (SystemErrorMessage)inboundMessage;
-                    _logger.LogError($"Error Type: {errorMessage.Type}, Error Message: {errorMessage.Description}");
-                    break;
-                default:
-                    _logger.LogWarning($"Unknown message type: {inboundMessage.Type}");
-                    break;
+                // if the setup message has any custom parameters, we will add them as a developer message
+                // so that they can be used by the LLM when generating responses
+                if (setupMessage.Result.CustomParameters?.Count > 0)
+                {
+                    var customParams = string.Join(Environment.NewLine, setupMessage.Result.CustomParameters);
+                    var setupMessageUpdate = $"The following custom parameters were recieved as context for the call and may be helpful: {customParams}";
+                    await context.Entities.SignalEntityAsync(conversationEntityInstance, nameof(ConversationHistoryEntity.AddDeveloperMessage), setupMessageUpdate);
+                }
             }
 
             return true;

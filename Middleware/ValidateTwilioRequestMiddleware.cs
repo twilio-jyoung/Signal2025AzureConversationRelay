@@ -27,7 +27,7 @@ namespace Signal2025AzureConversationRelay.Middleware
 
         public async Task Invoke(FunctionContext context, FunctionExecutionDelegate next)
         {
-            _logger.LogTrace("Validating Signature on Twilio Webhook.");
+            _logger.LogTrace("Twilio Webhook Received.  Starting Signature Validation.");
 
             var requestData = await context.GetHttpRequestDataAsync();
             var requestUrl = $"{requestData.Url.Scheme}://{requestData.Url.Host}{requestData.Url.PathAndQuery}";
