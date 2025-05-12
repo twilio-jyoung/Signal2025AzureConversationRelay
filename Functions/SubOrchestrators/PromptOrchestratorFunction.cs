@@ -37,18 +37,11 @@ namespace Signal2025AzureConversationRelay
             using(_logger.BeginScope(promptMessage.CallSid))
             {
 
-                await context.Entities.SignalEntityAsync(
+                // get the conversation entity by callSid
+                var chatHistory = await context.Entities.CallEntityAsync<ChatHistory>(
                     new EntityInstanceId(nameof(ConversationHistoryEntity), promptMessage.CallSid), 
                     nameof(ConversationHistoryEntity.AddUserMessage), 
                     promptMessage.VoicePrompt
-                );
-
-                // get the conversation entity by callSid
-                var chatHistory = await context.Entities.CallEntityAsync<ChatHistory>(
-                    new EntityInstanceId(
-                        nameof(ConversationHistoryEntity), 
-                        promptMessage.CallSid), 
-                    nameof(ConversationHistoryEntity.GetConversationHistory)
                 );
 
                 // generate a payload to pass to the activity function

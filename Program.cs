@@ -47,7 +47,9 @@ builder.UseWhen<ValidateTwilioRequestMiddleware>((context) => {
     var shouldValidateTwilioSignature = 
         context.FunctionDefinition.Name.Equals(nameof(IncomingCallHttpTriggerFunction), StringComparison.OrdinalIgnoreCase) 
         ||
-        context.FunctionDefinition.Name.Equals(nameof(CallStatusHttpTriggerFunction), StringComparison.OrdinalIgnoreCase);
+        context.FunctionDefinition.Name.Equals(nameof(CallStatusHttpTriggerFunction), StringComparison.OrdinalIgnoreCase)
+        ||
+        context.FunctionDefinition.Name.Equals(nameof(ConnectActionCallbackHttpTriggerFunction), StringComparison.OrdinalIgnoreCase);
 
     return shouldValidateTwilioSignature;
 });

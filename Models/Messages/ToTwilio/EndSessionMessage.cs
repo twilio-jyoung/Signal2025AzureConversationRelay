@@ -23,8 +23,9 @@ namespace Signal2025AzureConversationRelay.Messages.ToTwilio
         public Dictionary<string, object> HandoffData { get; set; }
 
         [JsonPropertyName("handoffData")]
-        public string SerializedHandoffData => JsonSerializer.Serialize(HandoffData);
+        public string SerializedHandoffData => MessageFactory.Serialize<Dictionary<string, object>>(HandoffData);
 
+        public EndSessionMessage() {}
         public EndSessionMessage(string callSid, Dictionary<string, object> handoffData = null)
         {
             CallSid = callSid ?? throw new ArgumentNullException(nameof(callSid), "CallSid cannot be null.");

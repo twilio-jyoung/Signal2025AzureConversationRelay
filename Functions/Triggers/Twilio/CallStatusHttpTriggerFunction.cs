@@ -35,7 +35,7 @@ namespace Signal2025AzureConversationRelay.Functions.Triggers.Twilio
                 if(callStatus == "completed" || callStatus == "failed" || callStatus == "busy")
                 {
                     var instance = await dtClient.GetInstanceAsync(callSid);
-                    if (instance.IsRunning)
+                    if (instance?.IsRunning == true)
                         await dtClient.RaiseEventAsync(callSid, "TwilioCallStatusCompletedEvent", callStatus);
                 }
 

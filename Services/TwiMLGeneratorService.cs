@@ -35,7 +35,7 @@ namespace Signal2025AzureConversationRelay.Services
 
             // setup the action callback URL for the TwiML response
             // https://www.twilio.com/docs/voice/twiml/connect/conversationrelay#connect-action-url-callback
-            var actionUrl = new Uri($"/calls/{callSid}/actionCallback", UriKind.Relative);
+            var actionUrl = new Uri($"/calls/actionCallback", UriKind.Relative);
             var connect = new Connect(action: actionUrl);
 
             // setup the conversation relay attributes

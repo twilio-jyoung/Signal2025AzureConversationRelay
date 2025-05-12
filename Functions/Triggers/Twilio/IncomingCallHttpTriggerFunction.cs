@@ -16,12 +16,20 @@ namespace Signal2025AzureConversationRelay
     public class IncomingCallHttpTriggerFunction
     {
         private readonly TwiMLGeneratorService _TwiMLGeneratorService;
+        private readonly SemanticKernelService _semanticKernelService;
         private readonly ILogger<IncomingCallHttpTriggerFunction> _logger;
 
-        public IncomingCallHttpTriggerFunction(ILogger<IncomingCallHttpTriggerFunction> logger, TwiMLGeneratorService twiMLGeneratorService)
+        public IncomingCallHttpTriggerFunction(
+            ILogger<IncomingCallHttpTriggerFunction> logger, 
+            TwiMLGeneratorService twiMLGeneratorService,
+            SemanticKernelService semanticKernelService)
         {
             _logger = logger;
             _TwiMLGeneratorService = twiMLGeneratorService;
+
+            // we dont actually use this here, but loading it here speeds up the first response
+            // on the very first call after a cold start as key vault secrets load slowly.
+            _semanticKernelService = semanticKernelService;
         }
 
         /// <summary>

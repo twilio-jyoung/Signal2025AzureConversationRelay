@@ -33,8 +33,6 @@ namespace Signal2025AzureConversationRelay.Functions.Activities
             string instanceId
         )
         {
-            _logger.LogTrace($"InstanceId: {instanceId}");
-
             var callSid = promptParams.UserPromptMessage.CallSid;
 
             var sentenceBuilder = new StringBuilder();
@@ -47,7 +45,8 @@ namespace Signal2025AzureConversationRelay.Functions.Activities
                 var ccs = _semanticKernelService.GetChatCompletionService();
                 var botResponse = ccs.GetStreamingChatMessageContentsAsync(
                     chatHistory: promptParams.ChatHistory,
-                    kernel: _semanticKernelService.Kernel
+                    kernel: _semanticKernelService.Kernel,
+                    executionSettings: _semanticKernelService.GetOpenAIPromptExecutionSettings()
                 );
                 
                 await foreach (var chunk in botResponse)
@@ -64,7 +63,7 @@ namespace Signal2025AzureConversationRelay.Functions.Activities
                         var promptOrchestrator = await dtClient.GetInstanceAsync(callSid.Substring(2));
                         if (promptOrchestrator.RuntimeStatus == OrchestrationRuntimeStatus.Terminated)
                         {
-                            _logger.LogWarning($"Parent Orchestrator was terminated.  Stopping streaming.");
+                            _logger.LogWarning($"Parent Orchestrator {instanceId} was terminated.  Stopping streaming.");
 
                             // signal to twilio that we're done sending tokens for right now
                             _azureWebPubSubService.SendMessageToCall(new SendTokenMessage(callSid, "", last: true));

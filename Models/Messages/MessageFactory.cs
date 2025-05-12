@@ -53,5 +53,10 @@ namespace Signal2025AzureConversationRelay.Messages
         {
             return JsonSerializer.Serialize(message, _serializerOptions);
         }
+
+        public static T Deserialize<T>(string json)
+        {
+            return JsonSerializer.Deserialize<T>(json, _serializerOptions);
+        }   
     }
 }

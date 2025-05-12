@@ -8,6 +8,8 @@ using Microsoft.DurableTask;
 using Microsoft.DurableTask.Entities;
 using Signal2025AzureConversationRelay.Entities;
 using Signal2025AzureConversationRelay.Messages.FromTwilio;
+using Signal2025AzureConversationRelay.Functions.Activities;
+using Signal2025AzureConversationRelay.Messages.ToTwilio;
 
 
 namespace Signal2025AzureConversationRelay
@@ -88,9 +90,6 @@ namespace Signal2025AzureConversationRelay
                 // decide if we should continue the call based on the event that was raised
                 callActive = await HandleIntialAwaitedEvent(context, conversationEntityInstance, timerTask, callStatusCompletedTask, setupMessage, processedEvent);
 
-                // keep track of a last running prompt sub-orchestrator instance id in case we need to cancel it
-                string promptSubOrchestratorInstanceId = null;
-
                 // next, we'll start a loop where we listen for messages from conversation relay 
                 // which signal a user action, and handle them accordingly.
                 while (callActive)
@@ -108,9 +107,6 @@ namespace Signal2025AzureConversationRelay
                     switch (callEvent)
                     {
                         case var _ when callEvent == userPromptTask:
-                            // generate a replay safe guid to use as the instance id if we need to run a sub-orchestrator
-                            promptSubOrchestratorInstanceId = context.NewGuid().ToString();
-
                             //send to a sub-orchestrator to handle the prompt
                             var taskOptions = new TaskOptions().WithInstanceId(callSid.Substring(2));
 
@@ -121,7 +117,22 @@ namespace Signal2025AzureConversationRelay
                             break;
 
                         case var _ when callEvent == userDTMFTask:
-                            _logger.LogTrace($"DTMF Digit: {userDTMFTask.Result.Digit}");
+                            
+                            var dtmfMessage = userDTMFTask.Result;
+                            _logger.LogTrace($"DTMF Digit: {dtmfMessage.Digit}");
+
+                            if(dtmfMessage.Digit == 0){
+                                var end = new EndSessionMessage(callSid, new Dictionary<string, object>
+                                {
+                                    { "action", "human_escalation" },
+                                    { "reason_code", "ZERO_ENTERED" },
+                                    { "summary", await GetConversationSummary(context) }
+                                });
+
+                                // var human_escalation = await context.CallActivityAsync<Task>(nameof(EndSessionActivityFunction), end);
+                                callActive = false;
+                            }
+
                             break;
 
                         case var _ when callEvent == timerTask:
@@ -134,6 +145,15 @@ namespace Signal2025AzureConversationRelay
                     }
                 }
             }
+        }
+        private static async Task<string> GetConversationSummary(TaskOrchestrationContext context)
+        {
+            var summary = await context.Entities.CallEntityAsync<string>(
+                new EntityInstanceId(nameof(ConversationHistoryEntity), context.InstanceId), 
+                nameof(ConversationHistoryEntity.GetSummary));
+
+            _logger.LogInformation($"Conversation summary: {summary}");
+            return summary;
         }
         private static async Task<bool> HandleIntialAwaitedEvent(TaskOrchestrationContext context, EntityInstanceId conversationEntityInstance, Task timerTask, Task<string> callStatusCompletedTask, Task<SystemSetupMessage> setupMessage, Task processedEvent)
         {
