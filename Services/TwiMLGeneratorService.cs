@@ -1,5 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Net;
+using System.Text;
+using System.Threading.Tasks;
+using Microsoft.Azure.Functions.Worker.Http;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Twilio.TwiML;
@@ -35,7 +39,7 @@ namespace Signal2025AzureConversationRelay.Services
 
             // setup the action callback URL for the TwiML response
             // https://www.twilio.com/docs/voice/twiml/connect/conversationrelay#connect-action-url-callback
-            var actionUrl = new Uri($"/calls/actionCallback", UriKind.Relative);
+            var actionUrl = new Uri($"/api/calls/actionCallback", UriKind.Relative);
             var connect = new Connect(action: actionUrl);
 
             // setup the conversation relay attributes
@@ -71,6 +75,42 @@ namespace Signal2025AzureConversationRelay.Services
             var response = new VoiceResponse();
             response.Append(connect.Append(conversationRelay));
 
+            return response;
+        }
+
+        public VoiceResponse GenerateHangupTwiML()
+        {
+            var response = new VoiceResponse();
+            response.Hangup();
+
+            return response;
+        }
+
+        public VoiceResponse GenerateSayAndHangupTwiML(string message)
+        {
+            var response = new VoiceResponse();
+            response.Say(message);
+            response.Hangup();
+
+            return response;
+        }
+
+        public VoiceResponse GenerateEnqueueToFlexWorkflowTwiML(string workflowSid)
+        {
+            var response = new VoiceResponse();
+            response.Enqueue(workflowSid: workflowSid);
+            return response;
+        }
+
+        /// <summary>
+        /// Creates an HTTP response with the provided TwiML.
+        /// </summary> 
+        public HttpResponseData CreateTwiMLHttpResponse(HttpRequestData req, VoiceResponse twiml)
+        {
+            var response = req.CreateResponse(HttpStatusCode.OK);
+            response.Headers.Add("Content-Type", "application/xml");
+            response.WriteString(twiml.ToString(), encoding: Encoding.UTF8);
+            
             return response;
         }
     }

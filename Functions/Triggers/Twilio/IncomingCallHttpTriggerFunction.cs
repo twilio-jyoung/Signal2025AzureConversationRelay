@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Net;
 using System.Text;
 using System.Threading.Tasks;
@@ -9,13 +8,14 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
 using Signal2025AzureConversationRelay.Services;
+using Signal2025AzureConversationRelay.Utilities;
 using Twilio.TwiML;
 
 namespace Signal2025AzureConversationRelay
 {
     public class IncomingCallHttpTriggerFunction
     {
-        private readonly TwiMLGeneratorService _TwiMLGeneratorService;
+        private readonly TwiMLGeneratorService _twiMLGeneratorService;
         private readonly SemanticKernelService _semanticKernelService;
         private readonly ILogger<IncomingCallHttpTriggerFunction> _logger;
 
@@ -25,7 +25,7 @@ namespace Signal2025AzureConversationRelay
             SemanticKernelService semanticKernelService)
         {
             _logger = logger;
-            _TwiMLGeneratorService = twiMLGeneratorService;
+            _twiMLGeneratorService = twiMLGeneratorService;
 
             // we dont actually use this here, but loading it here speeds up the first response
             // on the very first call after a cold start as key vault secrets load slowly.
@@ -45,16 +45,18 @@ namespace Signal2025AzureConversationRelay
             FunctionContext context
         )
         {
-            string callSid = GetParamFromContext(context.Items, "CallSid");
-            string to = GetParamFromContext(context.Items, "To");
-            string from = GetParamFromContext(context.Items, "From");
+            string callSid = ContextParamsHelper.GetParamFromContext(context.Items, "CallSid");
+
             using (_logger.BeginScope(callSid))
             {
                 try
                 {
+                    string to = ContextParamsHelper.GetParamFromContext(context.Items, "To");
+                    string from = ContextParamsHelper.GetParamFromContext(context.Items, "From");
                     _logger.LogTrace("Incoming call from {FROM} to {TO}", from, to);
+                    
                     await StartCallOrchestrator(dtClient, callSid);
-                    return await CreateTwiMLHttpResponse(req, _TwiMLGeneratorService.GenerateConversationRelayTwiML(callSid.ToString()));
+                    return _twiMLGeneratorService.CreateTwiMLHttpResponse(req, _twiMLGeneratorService.GenerateConversationRelayTwiML(callSid.ToString()));
                 }
                 catch (Exception ex)
                 {
@@ -62,31 +64,6 @@ namespace Signal2025AzureConversationRelay
                     return req.CreateResponse(HttpStatusCode.BadRequest);
                 }
             }
-        }
-
-        /// <summary>
-        /// Creates an HTTP response with the provided TwiML.
-        /// </summary> 
-        private static async Task<HttpResponseData> CreateTwiMLHttpResponse(HttpRequestData req, VoiceResponse twiml)
-        {
-            var response = req.CreateResponse(HttpStatusCode.OK);
-            response.Headers.Add("Content-Type", "application/xml");
-            await response.WriteStringAsync(twiml.ToString(), encoding: Encoding.UTF8);
-            
-            return response;
-        }
-
-        /// <summary>
-        /// Retrieves a string value from the FunctionContext.Items dictionary by key name.
-        /// (This is extracted from the raw http request by the ValidateTwilioRequestMiddleware).
-        /// </summary>
-        private string GetParamFromContext(IDictionary<object, object> items, string paramName)
-        {
-            if (items.TryGetValue(paramName, out var paramObj) && paramObj is string paramString)
-            {
-                return paramString;
-            }
-            throw new ArgumentException($"{paramName} not found in FunctionContext.Items");
         }
 
         /// <summary>

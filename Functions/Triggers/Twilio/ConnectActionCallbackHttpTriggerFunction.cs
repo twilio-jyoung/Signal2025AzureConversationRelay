@@ -1,24 +1,35 @@
 using System.Net;
 using System.Threading.Tasks;
-using Microsoft.Azure.WebJobs;
 using Microsoft.Extensions.Logging;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
 using Microsoft.DurableTask.Client;
 using System.Collections.Generic;
 using System;
-using Signal2025AzureConversationRelay.Messages.FromTwilio;
 using Signal2025AzureConversationRelay.Messages;
+using Signal2025AzureConversationRelay.Services;
+using Twilio.TwiML;
+using System.Text;
+using Signal2025AzureConversationRelay.Models.Messages.ToTwilio;
+using Signal2025AzureConversationRelay.Utilities;
 
 namespace Signal2025AzureConversationRelay.Functions.Triggers.Twilio
 {
     public class ConnectActionCallbackHttpTriggerFunction
     {
         private readonly ILogger<ConnectActionCallbackHttpTriggerFunction> _logger;
+        private readonly TwiMLGeneratorService _twiMLGeneratorService;
+        private readonly AzureWebPubSubService _azureWebPubSubService;
 
-        public ConnectActionCallbackHttpTriggerFunction(ILogger<ConnectActionCallbackHttpTriggerFunction> logger)
+        public ConnectActionCallbackHttpTriggerFunction(
+            ILogger<ConnectActionCallbackHttpTriggerFunction> logger, 
+            TwiMLGeneratorService twiMLGeneratorService,
+            AzureWebPubSubService azureWebPubSubService
+        )
         {
             _logger = logger;
+            _twiMLGeneratorService = twiMLGeneratorService;
+            _azureWebPubSubService = azureWebPubSubService;
         }
 
         [Function(nameof(ConnectActionCallbackHttpTriggerFunction))]
@@ -27,11 +38,18 @@ namespace Signal2025AzureConversationRelay.Functions.Triggers.Twilio
             [DurableClient] DurableTaskClient dtClient,
             FunctionContext context)
         {
-            string callSid = GetParamFromContext(context.Items, "CallSid");
+
+            _logger.LogTrace("ConnectActionCallbackHttpTriggerFunction called");
+
+            string callSid = ContextParamsHelper.GetParamFromContext(context.Items, "CallSid");
+
+            // at this point, conversation relay has indicated that it is no longer processing the call
+            // so go ahead and tear down the websocket connection (it would happen automatically after the timeout)
+            _azureWebPubSubService.CloseConnection(callSid);
 
             using (_logger.BeginScope(callSid))
             {
-                string sessionStatus = GetParamFromContext(context.Items, "SessionStatus");
+                string sessionStatus = ContextParamsHelper.GetParamFromContext(context.Items, "SessionStatus");
 
                 switch(sessionStatus)
                 {
@@ -40,11 +58,28 @@ namespace Signal2025AzureConversationRelay.Functions.Triggers.Twilio
                         break;
                     case "ended":
                         _logger.LogTrace("Session ended by application");
-                        var handoffDataJson = GetParamFromContext(context.Items, "HandoffData");
-                        var handoffData = System.Text.Json.JsonSerializer.Deserialize<dynamic>(handoffDataJson);
+                        var handoffDataJson = ContextParamsHelper.GetParamFromContext(context.Items, "HandoffData");
 
-                        // you would then use this to provide new twiml to twilio on how to handle the call
-                        // given the information provided in the HandoffData
+                        var handoffData = MessageFactory.Deserialize<EndSessionMessageHandoffData>(handoffDataJson);
+                        if (handoffData.EndSessionAction == EndSessionAction.Hangup){
+                            _logger.LogTrace("HandoffData indicates to hang up the call");
+                            return _twiMLGeneratorService.CreateTwiMLHttpResponse(
+                                req, _twiMLGeneratorService.GenerateHangupTwiML());
+                        }
+                        else if (handoffData.EndSessionAction == EndSessionAction.Escalate)
+                        {
+                            // at this point, you can generate any new TwiML you want to sent to Twilio
+                            _logger.LogTrace("HandoffData indicates to escalate the call");
+
+                            // say goodbye and hang up
+                            return _twiMLGeneratorService.CreateTwiMLHttpResponse(req, _twiMLGeneratorService.GenerateSayAndHangupTwiML("At this point you would be conected to a human. Goodbye..."));
+
+                            // send to flex
+                            //return await _twiMLGeneratorService.CreateTwiMLHttpResponse(req, _twiMLGeneratorService.GenerateEnqueueToFlexWorkflowTwiML("WW0123456789abcdef0123456789abcdef"));
+
+                            // whatever you want to do here
+                            // you can also add more data to the handoffData object if nceessary to provide more context
+                        }
                         break;
                     case "failed":
                         _logger.LogTrace("Error occurred during session");
@@ -54,22 +89,10 @@ namespace Signal2025AzureConversationRelay.Functions.Triggers.Twilio
                         break;
                 }
 
-                // for now, just log the session status and return a 200 OK response
                 var response = req.CreateResponse(HttpStatusCode.OK);
                 await response.WriteStringAsync("OK");
                 return response;
             }
         }
-
-        private static string GetParamFromContext(IDictionary<object, object> items, string paramName)
-        {
-            if (items.TryGetValue(paramName, out var paramObj) && paramObj is string paramString)
-            {
-                return paramString;
-            }
-            throw new ArgumentException($"{paramName} not found in FunctionContext.Items");
-        }
-
     }
-
 }

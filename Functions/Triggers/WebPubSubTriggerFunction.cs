@@ -45,25 +45,13 @@ namespace Signal2025AzureConversationRelay
                 // as it needs to be handled immediately.  This is a special case.
                 if (message.Type == InboundMessageType.Interrupt)
                 {
-                    _logger.LogDebug("UserInterruptMessage detected.  Bypassing orchestrator.");
-                    var interruptMessage = (UserInterruptMessage)message;
-
-                    var interruptMessageLog = new StringBuilder();
-                    interruptMessageLog.AppendLine("The customer interrupted your response before it could be completely read to them.");
-                    interruptMessageLog.AppendLine($"They only heard up to when you said: {interruptMessage.UtteranceUntilInterrupt}");
-
-                    await dtClient.Entities.SignalEntityAsync(
-                        new EntityInstanceId(nameof(ConversationHistoryEntity), callSid),
-                        nameof(ConversationHistoryEntity.AddSystemMessage),
-                        interruptMessageLog.ToString()
-                    );
-                    
                     try
                     {
-                        _logger.LogDebug("Terminating the PromptOrchestrator instance for callSid: {callSid}", callSid);
-                        await dtClient.TerminateInstanceAsync(callSid.Substring(2));
+                        _logger.LogDebug("Interrupt message received.  Terminating the prompt sub-orchestrator if running.");
+                        var interruptMessage = (UserInterruptMessage)message;
+                        await HandleInterrupt(dtClient, interruptMessage);
                     }
-                    catch (Exception) { } // may already be terminated, so ignore the error
+                    catch (Exception) { } // swallow exceptions here as the prompt sub-orchestrator may already be terminated
                 }
                 else
                 {
@@ -77,6 +65,23 @@ namespace Signal2025AzureConversationRelay
 
                 return new OkObjectResult("Ack");
             }
+        }
+
+        private async Task HandleInterrupt(DurableTaskClient dtClient, UserInterruptMessage interruptMessage)
+        {
+            var interruptMessageLog = new StringBuilder();
+            interruptMessageLog.Append("The customer interrupted your response before it could be completely read to them. ");
+            interruptMessageLog.Append($"They only heard up to when you said: '{interruptMessage.UtteranceUntilInterrupt}'.");
+
+            await dtClient.Entities.SignalEntityAsync(
+                new EntityInstanceId(nameof(ConversationHistoryEntity), interruptMessage.CallSid),
+                nameof(ConversationHistoryEntity.AddSystemMessage),
+                interruptMessageLog.ToString()
+            );
+
+            var promptSubOrchestratorInstance = await dtClient.GetInstanceAsync(interruptMessage.CallSid.Substring(2));
+            if (promptSubOrchestratorInstance.IsRunning)
+                await dtClient.TerminateInstanceAsync(promptSubOrchestratorInstance.InstanceId);
         }
     }
 }

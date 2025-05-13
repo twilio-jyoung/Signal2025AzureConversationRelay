@@ -3,6 +3,7 @@ using System.Net.Http;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.DurableTask.Client;
 using Microsoft.DurableTask.Entities;
@@ -35,14 +36,16 @@ namespace Signal2025AzureConversationRelay.Functions.Activities
         {
             var callSid = promptParams.UserPromptMessage.CallSid;
 
-            var sentenceBuilder = new StringBuilder();
-            var fullResponseBuilder = new StringBuilder();
-
             using (_logger.BeginScope(callSid))
             {
+                var sentenceBuilder = new StringBuilder();
+                var fullResponseBuilder = new StringBuilder();
+
                 _logger.LogTrace($"User: {promptParams.UserPromptMessage.VoicePrompt}");
 
                 var ccs = _semanticKernelService.GetChatCompletionService();
+
+                // send prompt to the chat completion service
                 var botResponse = ccs.GetStreamingChatMessageContentsAsync(
                     chatHistory: promptParams.ChatHistory,
                     kernel: _semanticKernelService.Kernel,
@@ -56,39 +59,24 @@ namespace Signal2025AzureConversationRelay.Functions.Activities
                     
                     sentenceBuilder.Append(chunk.Content);
 
-                    if(chunk.Content.Contains(".") || chunk.Content.Contains("!") || chunk.Content.Contains("?")){
-
+                    // this is not required, but significantly helps cut down the number of messages going through 
+                    // webpubsub while not impacting the user experience.
+                    if(chunk.Content.Contains(".") || chunk.Content.Contains("!") || chunk.Content.Contains("?"))
+                    {
                         var completeSentence = sentenceBuilder.ToString();
 
+                        // add the complete sentence to the response that has accumulated thus far 
+                        fullResponseBuilder.Append(completeSentence);
+ 
+                        // promptOrchestrator will be terminated if the user has interrupted the bot.
                         var promptOrchestrator = await dtClient.GetInstanceAsync(callSid.Substring(2));
                         if (promptOrchestrator.RuntimeStatus == OrchestrationRuntimeStatus.Terminated)
-                        {
-                            _logger.LogWarning($"Parent Orchestrator {instanceId} was terminated.  Stopping streaming.");
+                            await HandleInterrupt(dtClient, callSid, fullResponseBuilder);
 
-                            // signal to twilio that we're done sending tokens for right now
-                            _azureWebPubSubService.SendMessageToCall(new SendTokenMessage(callSid, "", last: true));
-
-                            // push what we have so far to the conversation history
-                            fullResponseBuilder.Append(completeSentence);
-                            await dtClient.Entities.SignalEntityAsync(
-                                new EntityInstanceId(nameof(ConversationHistoryEntity), callSid),
-                                nameof(ConversationHistoryEntity.AddAssistantMessage),
-                                fullResponseBuilder.ToString()
-                            );
-
-                            // then push that this was interrupted
-                            await dtClient.Entities.SignalEntityAsync(
-                                new EntityInstanceId(nameof(ConversationHistoryEntity), callSid),
-                                nameof(ConversationHistoryEntity.AddDeveloperMessage),
-                                _interruptNote
-                            );
-
-                            return "";
-                        }
-
+                        // send the complete sentence to the call.  
                         var sentenceEvent = new SendTokenMessage(callSid, completeSentence, last: false);
                         _azureWebPubSubService.SendMessageToCall(sentenceEvent);
-                        fullResponseBuilder.Append(completeSentence);
+                        
                         sentenceBuilder.Clear();
                     }
                 }
@@ -96,10 +84,33 @@ namespace Signal2025AzureConversationRelay.Functions.Activities
                 _azureWebPubSubService.SendMessageToCall(new SendTokenMessage(callSid, "", last: true));
 
                 var response = fullResponseBuilder.ToString();
+
                 _logger.LogTrace($"LLM: {response}");
 
-                return fullResponseBuilder.ToString();
+                return response;
             }
+        }
+
+        private async Task HandleInterrupt(DurableTaskClient dtClient, string callSid, StringBuilder fullResponseBuilder)
+        {
+            _logger.LogWarning($"Parent Orchestrator {callSid.Substring(2)} was terminated.  Stopping streaming.");
+
+            // signal to twilio that we're done sending tokens for right now
+            _azureWebPubSubService.SendMessageToCall(new SendTokenMessage(callSid, "", last: true));
+
+            // push what we have so far to the conversation history
+            await dtClient.Entities.SignalEntityAsync(
+                new EntityInstanceId(nameof(ConversationHistoryEntity), callSid),
+                nameof(ConversationHistoryEntity.AddAssistantMessage),
+                fullResponseBuilder.ToString()
+            );
+
+            // then push that this was interrupted
+            await dtClient.Entities.SignalEntityAsync(
+                new EntityInstanceId(nameof(ConversationHistoryEntity), callSid),
+                nameof(ConversationHistoryEntity.AddDeveloperMessage),
+                _interruptNote
+            );
         }
     }
 }

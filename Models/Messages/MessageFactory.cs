@@ -1,4 +1,6 @@
 using System;
+using System.Security.Cryptography.X509Certificates;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Signal2025AzureConversationRelay.Messages.FromTwilio;
@@ -21,7 +23,8 @@ namespace Signal2025AzureConversationRelay.Messages
             Converters =
             {
                 new JsonStringEnumConverter(JsonNamingPolicy.CamelCase)
-            }
+            },
+            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
         };
         
         public static IInboundMessage Deserialize(string json, string callSid)

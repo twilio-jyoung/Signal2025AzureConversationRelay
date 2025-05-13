@@ -7,6 +7,7 @@ using Microsoft.Azure.Functions.Worker.Http;
 using Microsoft.DurableTask.Client;
 using System.Collections.Generic;
 using System;
+using Signal2025AzureConversationRelay.Utilities;
 
 namespace Signal2025AzureConversationRelay.Functions.Triggers.Twilio
 {
@@ -25,8 +26,8 @@ namespace Signal2025AzureConversationRelay.Functions.Triggers.Twilio
             [DurableClient] DurableTaskClient dtClient,
             FunctionContext context)
         {
-            string callSid = GetParamFromContext(context.Items, "CallSid");
-            string callStatus = GetParamFromContext(context.Items, "CallStatus");
+            string callSid = ContextParamsHelper.GetParamFromContext(context.Items, "CallSid");
+            string callStatus = ContextParamsHelper.GetParamFromContext(context.Items, "CallStatus");
 
             using (_logger.BeginScope(callSid))
             {
@@ -43,19 +44,6 @@ namespace Signal2025AzureConversationRelay.Functions.Triggers.Twilio
                 await response.WriteStringAsync("OK");
                 return response;
             }
-        }
-
-        /// <summary>
-        /// Retrieves a string value from the FunctionContext.Items dictionary by key name.
-        /// (This is extracted from the raw http request by the ValidateTwilioRequestMiddleware).
-        /// </summary>
-        private static string GetParamFromContext(IDictionary<object, object> items, string paramName)
-        {
-            if (items.TryGetValue(paramName, out var paramObj) && paramObj is string paramString)
-            {
-                return paramString;
-            }
-            throw new ArgumentException($"{paramName} not found in FunctionContext.Items");
         }
     }
 }

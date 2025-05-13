@@ -10,6 +10,9 @@ using System.Linq;
 using System;
 using Signal2025AzureConversationRelay;
 using Signal2025AzureConversationRelay.Functions.Triggers.Twilio;
+using System.Collections.Generic;
+using Signal2025AzureConversationRelay.Messages.ToTwilio;
+using Signal2025AzureConversationRelay.Messages;
 
 var builder = FunctionsApplication.CreateBuilder(args);
 
@@ -75,4 +78,26 @@ logger.LogWarning("This is a warning message");
 logger.LogError("This is an error message");
 logger.LogCritical("This is a critical message");
 
+// var handoffData = new Dictionary<string, object>
+// {
+//     { "reasonCode", "live-agent-handoff" },
+//     { "reason", "The caller wants to talk to a real person" }
+// };
+// var message = new EndSessionMessage("CAxxx", handoffData);
+// logger.LogCritical(message.ToString());
+
+// if (message is IOutboundMessage)
+// {
+//     var callSid = (message as IOutboundMessage).CallSid;
+
+//     var jsonMessage = MessageFactory.Serialize(message);
+
+//     using (logger.BeginScope(callSid))
+//         logger.LogDebug($"{jsonMessage}");
+// }
+
+// force the semantic kernel to load its secrets from key vault
+var sks = host.Services.GetServices<SemanticKernelService>();
+
 host.Run();
+
