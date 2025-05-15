@@ -6,7 +6,7 @@
 	},
 	"Azure": {
 		"OpenAI": {
-			"DeploymentName": "gpt-4.1-standard",
+			"DeploymentName": "gpt-4o",
 			"Endpoint": "URL",
 			"APIKey": "KEY"
 		},
