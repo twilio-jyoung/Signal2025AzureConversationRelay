@@ -21,6 +21,16 @@
 
 _Create a new resource group for easy resource isolation_
 
+- Manual Step - Setup Web PubSub to properly authenticate to the Function
+  - Navigate to your new resource group and select the `Function App` type resource.
+  - Select **Functions**, then select **App Keys**
+  - Create a system key and note the value
+  - Navigate back to your resource group and select the `Web PubSub Service` type resource.
+  - Select **Settings**, the select **Settings** again
+  - Edit the `cr` hub, then edit the provided Event Handler URL
+  - Append the system key to the end of the URL after `?code=`
+  - Save
+
 ## Run the Code
 
 - Setup a local.settings.json file (cp local.settings.json.sample local.settings.json)
