@@ -65,7 +65,7 @@ _Create a new resource group for easy resource isolation_
   - Open your [Active Numbers](https://console.twilio.com/us1/develop/phone-numbers/manage/incoming) on your Twilio Account
     - Set the incoming call handler (**A call comes in**)
       - webhook
-      - {ngrok_url}/api/call
+      - {ngrok_url}/api/calls
       - HTTP POST
     - Set the call status handler (**Call status changes**)
       - {ngrok_url}/api/call-status-update
