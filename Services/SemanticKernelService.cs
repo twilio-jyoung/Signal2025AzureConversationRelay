@@ -18,14 +18,15 @@ namespace Signal2025AzureConversationRelay.Services
         private readonly Kernel _kernel;
         public SemanticKernelService(ILogger<SemanticKernelService> logger, IConfiguration configuration)
         {
-            var keyVaultUrl = new Uri(configuration["Azure:KeyVault:Url"]);
 
-            logger.LogTrace("Fetching Key Vault Secrets.");
-            var kv = new SecretClient(keyVaultUrl, new DefaultAzureCredential());
-            var deploymentName = kv.GetSecret("AzureOpenAiDeploymentName").Value.Value;
-            var endpoint = kv.GetSecret("AzureOpenAiEndpoint").Value.Value;
-            var apiKey = kv.GetSecret("AzureOpenAiApiKey").Value.Value;
-            logger.LogTrace($"Fetched Key Vault Secrets.");
+            // in production you should use keyvault.  for now, we will use the configuration
+            // var keyVaultUrl = new Uri(configuration["Azure:KeyVault:Url"]);
+            // logger.LogTrace("Fetching Key Vault Secrets.");
+            // var kv = new SecretClient(keyVaultUrl, new DefaultAzureCredential());
+            // var deploymentName = kv.GetSecret("AzureOpenAiDeploymentName").Value.Value;
+            // var endpoint = kv.GetSecret("AzureOpenAiEndpoint").Value.Value;
+            // var apiKey = kv.GetSecret("AzureOpenAiApiKey").Value.Value;
+            // logger.LogTrace($"Fetched Key Vault Secrets.");
             
             var _kernelBuilder = Kernel.CreateBuilder();
 
@@ -35,9 +36,9 @@ namespace Signal2025AzureConversationRelay.Services
             };
 
             _kernelBuilder.AddAzureOpenAIChatCompletion(
-                deploymentName: deploymentName ?? configuration["Azure:OpenAI:DeploymentName"],
-                endpoint: endpoint ?? configuration["Azure:OpenAI:Endpoint"],
-                apiKey: apiKey ?? configuration["Azure:OpenAI:ApiKey"]
+                deploymentName: configuration["Azure:OpenAI:DeploymentName"],
+                endpoint: configuration["Azure:OpenAI:Endpoint"],
+                apiKey: configuration["Azure:OpenAI:ApiKey"]
             );
             _kernel = _kernelBuilder.Build();
 

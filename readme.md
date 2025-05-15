@@ -12,6 +12,7 @@
   - [C\# extension](https://marketplace.visualstudio.com/items?itemName=ms-dotnettools.csharp) for Visual Studio Code.
   - [Azure Functions extension](https://marketplace.visualstudio.com/items?itemName=ms-azuretools.vscode-azurefunctions) for Visual Studio Code.
   - [Azurite extension](https://marketplace.visualstudio.com/items?itemName=Azurite.azurite) for Visual Studio Code.
+  - [Azure Developer CLI](https://learn.microsoft.com/en-us/azure/developer/azure-developer-cli/install-azd)
 - [ngrok](https://ngrok.com/download?utm-source=signal-jyoung)
 
 ## Deploy Azure Resources
@@ -30,6 +31,7 @@ _Create a new resource group for easy resource isolation_
     - Copy the `DeploymentName`, `Endpoint`, and `APIKey` into your settings file
   - Azure.WebPubSub
     - Navigate back to the new resource group and select the resource ending in `-webpubsub`
+    - Select **Settings**, then select **Keys**
     - Copy the Primary > `Connection String` into your settings file
     - Set the `HubName` to `cr` if not already set.
   - Azure.KeyVault
@@ -38,13 +40,20 @@ _Create a new resource group for easy resource isolation_
   - Twilio
     - Copy your `Account SID` and `Auth Token` into your settings file from the [Twilio Account Dashboard](https://console.twilio.com/)
 
+- Ensure SDKs are working
+
+  - `dotnet --version`
+    - You should see 9.\*. If you don't you may need to add dotnet to your path.
+  - `azd auth login`
+    - You should be asked to login via the portal.
+
 - Start Azurite using the Azurite Extention from the Command Palette
 
   - `>Azurite: Start`
 
-- Run the app using the Functions Extension from the Command Palette
+- Run the app from the terminal
 
-  - `>Azure Functions: Start`
+  - `func start`
 
 - Open a terminal and start ngrok
 

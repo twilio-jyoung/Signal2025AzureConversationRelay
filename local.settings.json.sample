@@ -2,9 +2,13 @@
 	"IsEncrypted": false,
 	"Values": {
 		"AzureWebJobsStorage": "UseDevelopmentStorage=true",
-		"FUNCTIONS_WORKER_RUNTIME": "dotnet-isolated"
+		"FUNCTIONS_WORKER_RUNTIME": "dotnet-isolated",
+		"AzureServicesAuthConnectionString": "RunAs=Developer; DeveloperTool=VisualStudio"
 	},
 	"Azure": {
+		"KeyVault": {
+			"Url": "URL"
+		},
 		"OpenAI": {
 			"DeploymentName": "gpt-4o",
 			"Endpoint": "URL",
