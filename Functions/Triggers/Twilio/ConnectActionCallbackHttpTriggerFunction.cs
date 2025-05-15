@@ -4,12 +4,8 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
 using Microsoft.DurableTask.Client;
-using System.Collections.Generic;
-using System;
 using Signal2025AzureConversationRelay.Messages;
 using Signal2025AzureConversationRelay.Services;
-using Twilio.TwiML;
-using System.Text;
 using Signal2025AzureConversationRelay.Models.Messages.ToTwilio;
 using Signal2025AzureConversationRelay.Utilities;
 
@@ -41,7 +37,7 @@ namespace Signal2025AzureConversationRelay.Functions.Triggers.Twilio
 
             _logger.LogTrace("ConnectActionCallbackHttpTriggerFunction called");
 
-            string callSid = ContextParamsHelper.GetParamFromContext(context.Items, "CallSid");
+            var callSid = ContextParamsHelper.GetParamFromContext(context.Items, "CallSid");
 
             // at this point, conversation relay has indicated that it is no longer processing the call
             // so go ahead and tear down the websocket connection (it would happen automatically after the timeout)
@@ -49,7 +45,7 @@ namespace Signal2025AzureConversationRelay.Functions.Triggers.Twilio
 
             using (_logger.BeginScope(callSid))
             {
-                string sessionStatus = ContextParamsHelper.GetParamFromContext(context.Items, "SessionStatus");
+                var sessionStatus = ContextParamsHelper.GetParamFromContext(context.Items, "SessionStatus");
 
                 switch(sessionStatus)
                 {

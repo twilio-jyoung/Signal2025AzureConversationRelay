@@ -1,6 +1,5 @@
 using System;
 using System.Net;
-using System.Text;
 using System.Threading.Tasks;
 using Microsoft.DurableTask;
 using Microsoft.DurableTask.Client;
@@ -9,7 +8,6 @@ using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
 using Signal2025AzureConversationRelay.Services;
 using Signal2025AzureConversationRelay.Utilities;
-using Twilio.TwiML;
 
 namespace Signal2025AzureConversationRelay
 {
@@ -45,14 +43,14 @@ namespace Signal2025AzureConversationRelay
             FunctionContext context
         )
         {
-            string callSid = ContextParamsHelper.GetParamFromContext(context.Items, "CallSid");
+            var callSid = ContextParamsHelper.GetParamFromContext(context.Items, "CallSid");
 
             using (_logger.BeginScope(callSid))
             {
                 try
                 {
-                    string to = ContextParamsHelper.GetParamFromContext(context.Items, "To");
-                    string from = ContextParamsHelper.GetParamFromContext(context.Items, "From");
+                    var to = ContextParamsHelper.GetParamFromContext(context.Items, "To");
+                    var from = ContextParamsHelper.GetParamFromContext(context.Items, "From");
                     _logger.LogTrace("Incoming call from {FROM} to {TO}", from, to);
                     
                     await StartCallOrchestrator(dtClient, callSid);

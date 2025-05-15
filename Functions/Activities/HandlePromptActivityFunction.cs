@@ -1,9 +1,5 @@
-using System;
-using System.Net.Http;
 using System.Text;
-using System.Text.Json;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.DurableTask.Client;
 using Microsoft.DurableTask.Entities;
@@ -30,8 +26,7 @@ namespace Signal2025AzureConversationRelay.Functions.Activities
         [Function(nameof(HandlePromptActivityFunction))]
         public async Task<string> HandlePrompt(
             [ActivityTrigger] HandlePromptActivityFunctionParams promptParams, 
-            [DurableClient] DurableTaskClient dtClient,
-            string instanceId
+            [DurableClient] DurableTaskClient dtClient
         )
         {
             var callSid = promptParams.UserPromptMessage.CallSid;

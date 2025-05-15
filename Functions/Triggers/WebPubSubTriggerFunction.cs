@@ -9,7 +9,6 @@ using Microsoft.Extensions.Logging;
 using Signal2025AzureConversationRelay.Entities;
 using Signal2025AzureConversationRelay.Messages;
 using Signal2025AzureConversationRelay.Messages.FromTwilio;
-using Twilio.TwiML.Messaging;
 
 namespace Signal2025AzureConversationRelay
 {
@@ -31,11 +30,11 @@ namespace Signal2025AzureConversationRelay
         {
             var _logger = context.GetLogger(context.FunctionDefinition.Name);
             var callSid = request.ConnectionContext.UserId;
-            var json = request.Data.ToString();
             
             using (_logger.BeginScope(callSid))
             {
                 // log the event
+                var json = request.Data.ToString();
                 _logger.LogDebug($"{json}");
 
                 // deserialize the message to get the type

@@ -1,12 +1,9 @@
 using System.Net;
 using System.Threading.Tasks;
-using Microsoft.Azure.WebJobs;
 using Microsoft.Extensions.Logging;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
 using Microsoft.DurableTask.Client;
-using System.Collections.Generic;
-using System;
 using Signal2025AzureConversationRelay.Utilities;
 
 namespace Signal2025AzureConversationRelay.Functions.Triggers.Twilio
@@ -26,8 +23,8 @@ namespace Signal2025AzureConversationRelay.Functions.Triggers.Twilio
             [DurableClient] DurableTaskClient dtClient,
             FunctionContext context)
         {
-            string callSid = ContextParamsHelper.GetParamFromContext(context.Items, "CallSid");
-            string callStatus = ContextParamsHelper.GetParamFromContext(context.Items, "CallStatus");
+            var callSid = ContextParamsHelper.GetParamFromContext(context.Items, "CallSid");
+            var callStatus = ContextParamsHelper.GetParamFromContext(context.Items, "CallStatus");
 
             using (_logger.BeginScope(callSid))
             {
