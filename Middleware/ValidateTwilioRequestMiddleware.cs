@@ -33,7 +33,7 @@ namespace Signal2025AzureConversationRelay.Middleware
             var requestUrl = $"{requestData.Url.Scheme}://{requestData.Url.Host}{requestData.Url.PathAndQuery}";
 
             // twilio sends to https, but if using ngrok, it will redirect to http, causing signature validation to fail.
-            if(requestUrl.Contains("http://") && requestUrl.Contains("ngrok.io"))
+            if(requestUrl.Contains("http://") && (requestUrl.Contains("ngrok.io") || requestUrl.Contains("ngrok.app")))
                 requestUrl = requestUrl.Replace("http://", "https://");
 
             var signature = GetHeaderValue(requestData, "X-Twilio-Signature");
