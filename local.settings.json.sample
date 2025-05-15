@@ -12,7 +12,7 @@
 		},
 		"WebPubSub": {
 			"ConnectionString": "Endpoint=",
-			"HubName": "Hub"
+			"HubName": "cr"
 		}
 	},
 	"Twilio": {
