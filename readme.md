@@ -1,5 +1,5 @@
 > [!WARNING]  
-> We've observed inconsistent behavior in the Azure Durable Functions state management due to the high frequency events from <ConversationRelay> coupled with the way Durable Functions leverage queues and tables for state management.  We're actively looking to migrate away from **Azure Durable Functions** into **App Container Service**.  You can get a simple demo up and working quickly with this pattern, but we cannot recommend it for production use.
+> We've observed inconsistent behavior in the Azure Durable Functions state management due to the high frequency events from <ConversationRelay> coupled with the way Durable Functions leverages queues and tables for state management.  We're actively looking to migrate away from **Azure Durable Functions** into **App Container Service**.  You can get a simple demo up and working quickly with this pattern, but we cannot recommend it for production use.
 
 ![banner](/Assets/cr-azure.png)
 
